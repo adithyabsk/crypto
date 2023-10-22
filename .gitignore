@@ -91,3 +91,6 @@ dmypy.json
 # Custom
 .DS_Store
 .idea
+.direnv
+.envrc
+venv
