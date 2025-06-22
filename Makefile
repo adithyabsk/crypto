@@ -22,7 +22,12 @@ test: dev ## Run pytest
 
 .PHONY: clean
 clean: ## Remove venv and cache
-	rm -rf .venv __pycache__ .pytest_cache *.egg-info
+	rm -rf .venv
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+	find . -type d -name ".pytest_cache" -exec rm -rf {} +
+	find . -name "*.egg-info" -type d -exec rm -rf {} +
+	find . -name "*.pyc" -delete
+	find . -name "*.pyo" -delete
 
 .PHONY: lint
 lint: dev ## Run linting tools
