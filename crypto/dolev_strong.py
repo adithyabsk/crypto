@@ -162,10 +162,15 @@ class Sender(Node):
             super().run(n_round)
 
 
+class MaliciousNodeStrategy(Enum):
+    DROP_ALL = 0  # Don't forward any messages
+    SEND_HALF = 1  # Only forward to half the peers
+
+
 class MaliciousStrategy(Enum):
     NONE = 0
     SENDER_ONLY = 1
-    FOLLOWER_NODES_ONLY = 2  # Not implemented
+    FOLLOWER_NODES_ONLY = 2
     SENDER_FOLLOWER_COORDINATED = 3  # Not implemented
 
 
@@ -211,21 +216,51 @@ class MaliciousSender(Node):
 
 class MaliciousNode(Node):
     is_malicious = True
-    malicious_message = SignedMessage("Malicious Message")
 
-    def __init__(self):
+    def __init__(
+        self, strategy: MaliciousNodeStrategy = MaliciousNodeStrategy.SEND_HALF
+    ):
         super().__init__()
+        self.strategy = strategy
         self.logger = logging.getLogger(f"MaliciousNode-{str(self.node_id)[:8]}")
 
     def run(self, n_round: int):
-        self.logger.info(f"Malicious node running round {n_round}")
+        self.logger.info(
+            f"Malicious node running round {n_round} with strategy {self.strategy.name}"
+        )
         self._check_peer_nodes()
+
         for msg in self.inbox:
             valid, n_sigs = SignedMessage.verify(msg)
             if valid and n_sigs == n_round and msg.message not in self.extracted_msg:
                 self.extracted_msg.add(msg.message)
                 msg = SignedMessage.sign(msg, self.node_id, self.private_key)
-                self.broadcast(msg)
+
+                if self.strategy == MaliciousNodeStrategy.DROP_ALL:
+                    # Malicious behavior: Don't forward any messages
+                    self.logger.info("Malicious node dropping all messages")
+                    return
+
+                elif self.strategy == MaliciousNodeStrategy.SEND_HALF:
+                    # Malicious behavior: Only forward to some nodes (Byzantine fault)
+                    # This simulates network partitioning or selective message dropping
+                    half_point = len(self.peers) // 2
+
+                    self.logger.info(
+                        f"Maliciously forwarding message to only {half_point} peers"
+                    )
+                    for node in self.peers[:half_point]:
+                        node.receive_msg(msg)
+
+                    # Don't forward to the remaining peers
+                    self.logger.info(
+                        "Dropping message for remaining "
+                        f"{len(self.peers) - half_point} peers"
+                    )
+                    return
+
+        # clear inbox
+        self.inbox = []
 
 
 class DolevStrong:
@@ -237,6 +272,7 @@ class DolevStrong:
         malicious_count: int | None = None,
         n_rounds: int | None = None,
         malicious_strategy: MaliciousStrategy | None = None,
+        malicious_node_strategy: MaliciousNodeStrategy | None = None,
     ):
         self.logger = logging.getLogger("DolevStrong")
 
@@ -248,8 +284,34 @@ class DolevStrong:
             self.sender = Sender(input_msg)
             self.logger.info("Created honest sender")
 
-        self.nodes = [Node() for _ in range(node_count - 1)]
-        self.logger.info(f"Created {len(self.nodes)} additional nodes")
+        # Create nodes based on malicious strategy
+        self.nodes = []
+        if (
+            malicious_strategy == MaliciousStrategy.FOLLOWER_NODES_ONLY
+            and malicious_count
+        ):
+            # Default to SEND_HALF if no strategy specified
+            node_strategy = malicious_node_strategy or MaliciousNodeStrategy.SEND_HALF
+
+            # Create malicious follower nodes
+            malicious_nodes = [
+                MaliciousNode(node_strategy) for _ in range(malicious_count)
+            ]
+            self.logger.info(
+                f"Created {len(malicious_nodes)} malicious follower nodes "
+                f"with strategy {node_strategy.name}"
+            )
+
+            # Create remaining honest nodes
+            honest_nodes = [Node() for _ in range(node_count - 1 - malicious_count)]
+            self.logger.info(f"Created {len(honest_nodes)} honest follower nodes")
+
+            # Combine all nodes
+            self.nodes = malicious_nodes + honest_nodes
+        else:
+            # Default case: all honest nodes
+            self.nodes = [Node() for _ in range(node_count - 1)]
+            self.logger.info(f"Created {len(self.nodes)} additional nodes")
 
         # set node peers
         self.sender.peers = self.nodes
