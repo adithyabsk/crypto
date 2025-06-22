@@ -15,16 +15,25 @@ plt.set_loglevel(level="warning")
 class DolevStrongVisualizer:
     """Visualizes the Dolev-Strong protocol message passing."""
 
-    def __init__(self, dolev_strong_instance):
+    def __init__(
+        self, dolev_strong_instance, fig=None, ax=None, is_web_environment=False
+    ):
         # Set up logging
         self.logger = logging.getLogger("DolevStrongVisualizer")
         self.logger.info("Initializing DolevStrongVisualizer")
 
         self.ds = dolev_strong_instance
-        self.fig, self.ax = plt.subplots(figsize=(14, 10))
+        self.is_web_environment = is_web_environment
 
-        # Make room for controls at the bottom
-        plt.subplots_adjust(bottom=0.25)
+        # Create figure and axes if not provided
+        if fig is None or ax is None:
+            self.fig, self.ax = plt.subplots(figsize=(14, 10))
+        else:
+            self.fig, self.ax = fig, ax
+
+        # Make room for controls at the bottom (not needed for web environment)
+        if not is_web_environment:
+            plt.subplots_adjust(bottom=0.25)
 
         self.node_positions = self._calculate_node_positions()
         self.message_log = []
@@ -34,7 +43,20 @@ class DolevStrongVisualizer:
         self._slider_update_from_animation = False
         self._user_interacting_with_slider = False
 
-        # Create slider for round control - fixed to only allow integer values
+        # Create UI controls only if not in web environment
+        self.round_slider = None
+        self.play_button = None
+        self.animation = None
+        self.is_playing = False
+
+        if not is_web_environment:
+            self._create_controls()
+
+        self.logger.info(f"Initialization complete. n_rounds: {self.ds.n_rounds}")
+
+    def _create_controls(self):
+        """Create slider and button controls for interactive use."""
+        # Create slider for round control
         ax_slider = plt.axes([0.2, 0.1, 0.5, 0.03])
         self.round_slider = Slider(
             ax_slider,
@@ -43,7 +65,7 @@ class DolevStrongVisualizer:
             self.ds.n_rounds,
             valinit=0,
             valfmt="%d",
-            valstep=1,  # Added valstep=1 to make it discrete
+            valstep=1,
         )
         self.round_slider.on_changed(self.update_round)
 
@@ -51,12 +73,6 @@ class DolevStrongVisualizer:
         ax_button = plt.axes([0.75, 0.1, 0.1, 0.04])
         self.play_button = Button(ax_button, "Play")
         self.play_button.on_clicked(self.toggle_animation)
-
-        # Animation state
-        self.animation = None
-        self.is_playing = False
-
-        self.logger.info(f"Initialization complete. n_rounds: {self.ds.n_rounds}")
 
     def _calculate_node_positions(self) -> dict[uuid.UUID, tuple[float, float]]:
         """Calculate positions for nodes in a circle layout."""
@@ -286,6 +302,9 @@ class DolevStrongVisualizer:
 
     def update_round(self, val):
         """Update visualization when slider changes."""
+        if self.round_slider is None:
+            return
+
         round_num = int(self.round_slider.val)
 
         if self._slider_update_from_animation:
@@ -349,23 +368,33 @@ class DolevStrongVisualizer:
                 f"Animation should now be running. is_playing: {self.is_playing}"
             )
 
-    def create_auto_animation(self):
-        """Create automatic animation that updates the slider."""
+    def create_auto_animation(self, event_source=None):
+        """Create automatic animation that updates the slider.
+
+        Args:
+            event_source: Optional timer for animation (for web support)
+        """
         self.logger.info("Creating FuncAnimation")
 
         def animate(frame):
             current_round = frame % (self.ds.n_rounds + 1)
             self.logger.debug(
-                f"Animation frame {frame}, setting slider to round {current_round}"
+                f"Animation frame {frame}, setting round to {current_round}"
             )
 
-            # Mark that this update is from animation
+            # For web environment, just update visualization directly
+            if self.is_web_environment or self.round_slider is None:
+                self.visualize_round(current_round)
+                return []
+
+            # For desktop environment, update through slider
             self._slider_update_from_animation = True
             self.round_slider.set_val(current_round)
             self._slider_update_from_animation = False
 
             return []
 
+        # Create animation with provided event source or default
         ani = FuncAnimation(
             self.fig,
             animate,
@@ -373,6 +402,7 @@ class DolevStrongVisualizer:
             interval=1000,
             repeat=True,
             blit=False,
+            event_source=event_source,
         )
 
         self.logger.info(f"FuncAnimation created: {ani}")
@@ -386,6 +416,19 @@ class DolevStrongVisualizer:
         self.fig.canvas.draw_idle()
 
         return ani
+
+    def create_web_animation(self, timer_class=None):
+        """Create animation specifically for web environment.
+
+        Args:
+            timer_class: Timer class to use for web environment
+        """
+        if timer_class is None:
+            self.logger.warning("No timer class provided for web animation")
+            return self.create_auto_animation()
+
+        timer = timer_class(interval=1500)
+        return self.create_auto_animation(event_source=timer)
 
     def show_interactive_visualization(self):
         """Show interactive visualization with controls."""
@@ -416,8 +459,14 @@ class VisualizableDolevStrong:
     def __init__(self, *args, **kwargs):
         from crypto.dolev_strong import DolevStrong
 
+        # Get is_web_environment flag from kwargs if provided
+        is_web_environment = kwargs.pop("is_web_environment", False)
+
         self.ds = DolevStrong(*args, **kwargs)
-        self.visualizer = DolevStrongVisualizer(self.ds)
+
+        self.visualizer = DolevStrongVisualizer(
+            self.ds, is_web_environment=is_web_environment
+        )
 
         # Set up logging
         self.logger = logging.getLogger("VisualizableDolevStrong")
