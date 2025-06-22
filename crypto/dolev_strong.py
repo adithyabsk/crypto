@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from abc import ABC, abstractmethod
 from collections import namedtuple
 from enum import Enum
 
@@ -171,7 +172,7 @@ class MaliciousStrategy(Enum):
     NONE = 0
     SENDER_ONLY = 1
     FOLLOWER_NODES_ONLY = 2
-    SENDER_FOLLOWER_COORDINATED = 3  # Not implemented
+    SENDER_FOLLOWER_COORDINATED = 3
 
 
 class MaliciousSender(Node):
@@ -210,6 +211,70 @@ class MaliciousSender(Node):
             self.inbox = []
             # receive the new message
             self.receive_msg(malicious_msg)
+        else:
+            super().run(n_round)
+
+
+class CoordinatedMaliciousSender(Node):
+    is_malicious = True
+
+    def __init__(self, input_msg, coordinated_nodes):
+        super().__init__()
+        self.logger = logging.getLogger(f"CoordMaliciousSender-{str(self.node_id)[:8]}")
+        self.input_msg = SignedMessage(input_msg)
+        self.fake_message_1 = SignedMessage("Coordinated Fake A")
+        self.fake_message_2 = SignedMessage("Coordinated Fake B")
+        self.coordinated_nodes = coordinated_nodes  # Set of malicious node IDs
+
+    def run(self, n_round: int):
+        if n_round == 0:
+            self.logger.info("Coordinated malicious sender starting attack")
+
+            # Sign all messages
+            real_msg = SignedMessage.sign(
+                self.input_msg, self.node_id, self.private_key
+            )
+            fake_msg_1 = SignedMessage.sign(
+                self.fake_message_1, self.node_id, self.private_key
+            )
+            fake_msg_2 = SignedMessage.sign(
+                self.fake_message_2, self.node_id, self.private_key
+            )
+
+            # Separate honest and malicious nodes
+            honest_nodes = [n for n in self.peers if not n.is_malicious]
+            malicious_nodes = [n for n in self.peers if n.is_malicious]
+
+            # Strategy: Send different conflicting messages
+            # to different groups of honest nodes
+            third = max(1, len(honest_nodes) // 3)
+
+            self.logger.info(f"Sending real message to {third} honest nodes")
+            for node in honest_nodes[:third]:
+                node.receive_msg(real_msg)
+
+            self.logger.info(f"Sending fake message A to {third} honest nodes")
+            for node in honest_nodes[third : 2 * third]:
+                node.receive_msg(fake_msg_1)
+
+            self.logger.info(
+                "Sending fake message B to remaining "
+                f"{len(honest_nodes) - 2 * third} honest nodes"
+            )
+            for node in honest_nodes[2 * third :]:
+                node.receive_msg(fake_msg_2)
+
+            # Coordinate with malicious nodes - give them all conflicting messages
+            # so they can amplify the confusion
+            self.logger.info("Coordinating with malicious follower nodes")
+            for node in malicious_nodes:
+                node.receive_msg(real_msg)
+                node.receive_msg(fake_msg_1)
+                node.receive_msg(fake_msg_2)
+
+            # Send to self (sender keeps one of the fake messages)
+            self.inbox = []
+            self.receive_msg(fake_msg_1)
         else:
             super().run(n_round)
 
@@ -263,6 +328,217 @@ class MaliciousNode(Node):
         self.inbox = []
 
 
+class CoordinatedMaliciousNode(Node):
+    is_malicious = True
+
+    def __init__(self, coordinated_sender_id):
+        super().__init__()
+        self.coordinated_sender_id = coordinated_sender_id
+        self.logger = logging.getLogger(f"CoordMaliciousNode-{str(self.node_id)[:8]}")
+
+    def run(self, n_round: int):
+        self.logger.info(f"Coordinated malicious node running round {n_round}")
+        self._check_peer_nodes()
+
+        for msg in self.inbox:
+            valid, n_sigs = SignedMessage.verify(msg)
+            if valid and n_sigs == n_round and msg.message not in self.extracted_msg:
+                self.extracted_msg.add(msg.message)
+                signed_msg = SignedMessage.sign(msg, self.node_id, self.private_key)
+
+                # Coordination strategy: Try to maximize confusion by selectively
+                # forwarding different conflicting messages to prevent consensus
+                honest_peers = [p for p in self.peers if not p.is_malicious]
+
+                if len(honest_peers) > 0:
+                    # Strategic forwarding based on message content
+                    if "Coordinated Fake A" in msg.message:
+                        # Forward fake A to first half of honest nodes
+                        half = len(honest_peers) // 2
+                        self.logger.info(
+                            f"Strategically forwarding Fake A to {half} honest nodes"
+                        )
+                        for node in honest_peers[:half]:
+                            node.receive_msg(signed_msg)
+
+                    elif "Coordinated Fake B" in msg.message:
+                        # Forward fake B to second half of honest nodes
+                        half = len(honest_peers) // 2
+                        self.logger.info(
+                            "Strategically forwarding Fake B to "
+                            f"{len(honest_peers) - half} honest nodes"
+                        )
+                        for node in honest_peers[half:]:
+                            node.receive_msg(signed_msg)
+
+                    else:
+                        # For the real message, limit its spread to create inconsistency
+                        self.logger.info("Limiting spread of real message to few nodes")
+                        # Only forward to a small subset to prevent it from
+                        # gaining majority
+                        subset_size = min(2, len(honest_peers) // 3)
+                        for node in honest_peers[:subset_size]:
+                            node.receive_msg(signed_msg)
+
+                # Always forward to other malicious nodes to maintain coordination
+                for peer in self.peers:
+                    if peer.is_malicious and peer != self:
+                        peer.receive_msg(signed_msg)
+
+        self.inbox = []
+
+
+class NetworkSetupStrategy(ABC):
+    """Abstract base class for different network setup strategies."""
+
+    @abstractmethod
+    def create_sender(self, input_msg: str) -> Node:
+        """Create and return the sender node."""
+        pass
+
+    @abstractmethod
+    def create_nodes(
+        self,
+        node_count: int,
+        malicious_count: int,
+        malicious_node_strategy: MaliciousNodeStrategy | None,
+    ) -> list[Node]:
+        """Create and return the follower nodes."""
+        pass
+
+    @abstractmethod
+    def get_description(self, malicious_count: int) -> str:
+        """Get a description of the network setup."""
+        pass
+
+
+class HonestNetworkStrategy(NetworkSetupStrategy):
+    """Create a network with all honest nodes."""
+
+    def create_sender(self, input_msg: str) -> Node:
+        return Sender(input_msg)
+
+    def create_nodes(
+        self,
+        node_count: int,
+        malicious_count: int,
+        malicious_node_strategy: MaliciousNodeStrategy | None,
+    ) -> list[Node]:
+        return [Node() for _ in range(node_count - 1)]
+
+    def get_description(self, malicious_count: int) -> str:
+        return "Created honest sender and all honest nodes"
+
+
+class MaliciousSenderStrategy(NetworkSetupStrategy):
+    """Create a network with only a malicious sender."""
+
+    def create_sender(self, input_msg: str) -> Node:
+        return MaliciousSender(input_msg)
+
+    def create_nodes(
+        self,
+        node_count: int,
+        malicious_count: int,
+        malicious_node_strategy: MaliciousNodeStrategy | None,
+    ) -> list[Node]:
+        return [Node() for _ in range(node_count - 1)]
+
+    def get_description(self, malicious_count: int) -> str:
+        return "Created malicious sender and honest follower nodes"
+
+
+class MaliciousFollowersStrategy(NetworkSetupStrategy):
+    """Create a network with honest sender and malicious followers."""
+
+    def create_sender(self, input_msg: str) -> Node:
+        return Sender(input_msg)
+
+    def create_nodes(
+        self,
+        node_count: int,
+        malicious_count: int,
+        malicious_node_strategy: MaliciousNodeStrategy | None,
+    ) -> list[Node]:
+        if not malicious_count:
+            raise ValueError("Malicious count must be specified for this strategy")
+
+        # Default to SEND_HALF if no strategy specified
+        node_strategy = malicious_node_strategy or MaliciousNodeStrategy.SEND_HALF
+
+        # Create malicious follower nodes
+        malicious_nodes = [MaliciousNode(node_strategy) for _ in range(malicious_count)]
+
+        # Create remaining honest nodes
+        honest_nodes = [Node() for _ in range(node_count - 1 - malicious_count)]
+
+        # Combine all nodes
+        return malicious_nodes + honest_nodes
+
+    def get_description(self, malicious_count: int) -> str:
+        return (
+            f"Created honest sender, {malicious_count} malicious follower nodes, "
+            f"and {malicious_count} honest follower nodes"
+        )
+
+
+class CoordinatedAttackStrategy(NetworkSetupStrategy):
+    """Create a coordinated attack with malicious sender and followers."""
+
+    def __init__(self):
+        self.coordinated_nodes = set()
+        self.sender = None
+
+    def create_sender(self, input_msg: str) -> Node:
+        # Create coordinated malicious sender
+        self.sender = CoordinatedMaliciousSender(input_msg, self.coordinated_nodes)
+        return self.sender
+
+    def create_nodes(
+        self,
+        node_count: int,
+        malicious_count: int,
+        malicious_node_strategy: MaliciousNodeStrategy | None,
+    ) -> list[Node]:
+        if not malicious_count or malicious_count < 2:
+            raise ValueError(
+                "Coordinated attack requires at least "
+                "2 malicious nodes (sender + followers)"
+            )
+
+        nodes = []
+
+        # Create coordinated malicious nodes first
+        malicious_follower_count = malicious_count - 1  # -1 for malicious sender
+
+        for _ in range(malicious_follower_count):
+            malicious_node = CoordinatedMaliciousNode(None)  # Will set sender ID later
+            self.coordinated_nodes.add(malicious_node.node_id)
+            nodes.append(malicious_node)
+
+        # Update malicious nodes with sender ID after sender is created
+        if self.sender:
+            for node in nodes:
+                if isinstance(node, CoordinatedMaliciousNode):
+                    node.coordinated_sender_id = self.sender.node_id
+
+        # Create remaining honest nodes
+        honest_count = node_count - 1 - malicious_follower_count
+        honest_nodes = [Node() for _ in range(honest_count)]
+        nodes.extend(honest_nodes)
+
+        return nodes
+
+    def get_description(self, malicious_count: int) -> str:
+        malicious_follower_count = malicious_count - 1
+        honest_count = malicious_count - 1 - malicious_follower_count
+        return (
+            f"Created coordinated attack: 1 malicious sender + "
+            f"{malicious_follower_count} coordinated malicious followers + "
+            f"{honest_count} honest nodes"
+        )
+
+
 class DolevStrong:
     def __init__(
         self,
@@ -276,59 +552,39 @@ class DolevStrong:
     ):
         self.logger = logging.getLogger("DolevStrong")
 
-        # set up nodes
-        if malicious_strategy == MaliciousStrategy.SENDER_ONLY:
-            self.sender = MaliciousSender(input_msg)
-            self.logger.info("Created malicious sender")
-        else:
-            self.sender = Sender(input_msg)
-            self.logger.info("Created honest sender")
-
-        # Create nodes based on malicious strategy
-        self.nodes = []
-        if (
-            malicious_strategy == MaliciousStrategy.FOLLOWER_NODES_ONLY
-            and malicious_count
-        ):
-            # Default to SEND_HALF if no strategy specified
-            node_strategy = malicious_node_strategy or MaliciousNodeStrategy.SEND_HALF
-
-            # Create malicious follower nodes
-            malicious_nodes = [
-                MaliciousNode(node_strategy) for _ in range(malicious_count)
-            ]
-            self.logger.info(
-                f"Created {len(malicious_nodes)} malicious follower nodes "
-                f"with strategy {node_strategy.name}"
-            )
-
-            # Create remaining honest nodes
-            honest_nodes = [Node() for _ in range(node_count - 1 - malicious_count)]
-            self.logger.info(f"Created {len(honest_nodes)} honest follower nodes")
-
-            # Combine all nodes
-            self.nodes = malicious_nodes + honest_nodes
-        else:
-            # Default case: all honest nodes
-            self.nodes = [Node() for _ in range(node_count - 1)]
-            self.logger.info(f"Created {len(self.nodes)} additional nodes")
-
-        # set node peers
-        self.sender.peers = self.nodes
-        for i, n in enumerate(self.nodes):
-            n.peers = [self.sender] + self.nodes[:i] + self.nodes[i + 1 :]
-
+        # Validate inputs
         if malicious_strategy and malicious_count is None:
             raise ValueError(
                 "If a malicious strategy is specified, the number of malicious "
                 "nodes must also be specified"
             )
 
+        # Set up strategy based on malicious_strategy
+        strategy = self._get_network_strategy(malicious_strategy)
+
+        # Create sender and nodes using strategy
+        self.sender = strategy.create_sender(input_msg)
+        self.nodes = strategy.create_nodes(
+            node_count, malicious_count or 0, malicious_node_strategy
+        )
+
+        # Log the network setup
+        self.logger.info(strategy.get_description(malicious_count or 0))
+
+        # Set node peers
+        self.sender.peers = self.nodes
+        for i, n in enumerate(self.nodes):
+            n.peers = [self.sender] + self.nodes[:i] + self.nodes[i + 1 :]
+
+        # Set instance variables
         self.malicious_count = 0 if malicious_count is None else malicious_count
         self.n_rounds = self.malicious_count + 1 if n_rounds is None else n_rounds
         self.malicious_strategy = (
             MaliciousStrategy.NONE if malicious_strategy is None else malicious_strategy
         )
+
+        # Validate configuration
+        self._validate_configuration(node_count)
 
         self.logger.info(
             f"Configuration: {node_count} nodes, "
@@ -336,6 +592,21 @@ class DolevStrong:
             f"{self.n_rounds} rounds"
         )
 
+    def _get_network_strategy(
+        self, malicious_strategy: MaliciousStrategy | None
+    ) -> NetworkSetupStrategy:
+        """Get the appropriate network setup strategy based on malicious_strategy."""
+        if malicious_strategy == MaliciousStrategy.SENDER_ONLY:
+            return MaliciousSenderStrategy()
+        elif malicious_strategy == MaliciousStrategy.FOLLOWER_NODES_ONLY:
+            return MaliciousFollowersStrategy()
+        elif malicious_strategy == MaliciousStrategy.SENDER_FOLLOWER_COORDINATED:
+            return CoordinatedAttackStrategy()
+        else:
+            return HonestNetworkStrategy()
+
+    def _validate_configuration(self, node_count: int):
+        """Validate the network configuration."""
         if (self.malicious_count + 1) >= node_count:
             raise ValueError(
                 "The number of malicious nodes (including the sender) cannot "
@@ -344,7 +615,7 @@ class DolevStrong:
 
         if self.n_rounds < (self.malicious_count + 1):
             raise ValueError(
-                "In order for Dolev-Strong to converge, the number of rounds"
+                "In order for Dolev-Strong to converge, the number of rounds "
                 "must be greater than or equal to the number of malicious "
                 "nodes + 1"
             )

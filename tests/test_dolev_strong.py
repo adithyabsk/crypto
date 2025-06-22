@@ -106,3 +106,90 @@ def test_dolev_extreme_malicious_followers():
     # all nodes should agree on sender's message
     for node in ds.all_nodes:
         assert node.output() == in_str
+
+
+def test_dolev_coordinated_attack():
+    """Test coordinated attack between malicious sender and malicious followers."""
+    from crypto.dolev_strong import DolevStrong, MaliciousStrategy
+
+    in_str = "Hello World!"
+    n_nodes = 8  # 1 sender + 7 followers
+    malicious_count = 4  # 1 malicious sender + 3 malicious followers
+
+    ds = DolevStrong(
+        n_nodes,
+        in_str,
+        malicious_count=malicious_count,
+        malicious_strategy=MaliciousStrategy.SENDER_FOLLOWER_COORDINATED,
+    )
+    ds.run()
+
+    # Even with coordinated attack, Dolev-Strong should ensure that
+    # honest nodes either all agree on the same value or all output default (0)
+    honest_outputs = [node.output() for node in ds.all_nodes if not node.is_malicious]
+
+    # All honest nodes should have the same output (Agreement property)
+    assert len(set(honest_outputs)) == 1, f"Honest nodes disagreed: {honest_outputs}"
+
+    # The output should be either 0 (no consensus due to conflicting messages)
+    # or one of the valid messages (if protocol achieved consensus despite attack)
+    honest_output = honest_outputs[0]
+    valid_outputs = {0, in_str, "Coordinated Fake A", "Coordinated Fake B"}
+    assert honest_output in valid_outputs, f"Unexpected output: {honest_output}"
+
+    print(f"Coordinated attack test passed. Honest nodes agreed on: {honest_output}")
+
+
+def test_dolev_coordinated_attack_minimal():
+    """Test coordinated attack with minimal configuration (exactly at threshold)."""
+    from crypto.dolev_strong import DolevStrong, MaliciousStrategy
+
+    in_str = "Hello World!"
+    n_nodes = 4  # 1 sender + 3 followers
+    malicious_count = 2  # 1 malicious sender + 1 malicious follower
+
+    ds = DolevStrong(
+        n_nodes,
+        in_str,
+        malicious_count=malicious_count,
+        malicious_strategy=MaliciousStrategy.SENDER_FOLLOWER_COORDINATED,
+    )
+    ds.run()
+
+    # Check that honest nodes maintain agreement
+    honest_outputs = [node.output() for node in ds.all_nodes if not node.is_malicious]
+    assert len(set(honest_outputs)) == 1, f"Honest nodes disagreed: {honest_outputs}"
+
+    # With fewer malicious nodes, protocol might still achieve consensus
+    honest_output = honest_outputs[0]
+    valid_outputs = {0, in_str, "Coordinated Fake A", "Coordinated Fake B"}
+    assert honest_output in valid_outputs, f"Unexpected output: {honest_output}"
+
+    print(f"Minimal coordinated attack test passed. Output: {honest_output}")
+
+
+def test_dolev_coordinated_attack_large_network():
+    """Test coordinated attack in larger network to verify scalability."""
+    from crypto.dolev_strong import DolevStrong, MaliciousStrategy
+
+    in_str = "Hello World!"
+    n_nodes = 12  # 1 sender + 11 followers
+    malicious_count = 6  # 1 malicious sender + 5 malicious followers (exactly half)
+
+    ds = DolevStrong(
+        n_nodes,
+        in_str,
+        malicious_count=malicious_count,
+        malicious_strategy=MaliciousStrategy.SENDER_FOLLOWER_COORDINATED,
+    )
+    ds.run()
+
+    # Even with many coordinated malicious nodes, Agreement should hold
+    honest_outputs = [node.output() for node in ds.all_nodes if not node.is_malicious]
+    assert len(set(honest_outputs)) == 1, f"Honest nodes disagreed: {honest_outputs}"
+
+    honest_output = honest_outputs[0]
+    valid_outputs = {0, in_str, "Coordinated Fake A", "Coordinated Fake B"}
+    assert honest_output in valid_outputs, f"Unexpected output: {honest_output}"
+
+    print(f"Large network coordinated attack test passed. Output: {honest_output}")
