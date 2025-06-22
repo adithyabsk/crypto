@@ -3,7 +3,6 @@
 import uuid
 from collections import namedtuple
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -11,7 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from tqdm import tqdm
 
-public_key_store: Dict[uuid.UUID, RSAPublicKey] = {}
+public_key_store: dict[uuid.UUID, RSAPublicKey] = {}
 """Maps node_id to a public key"""
 
 
@@ -19,11 +18,9 @@ Signature = namedtuple("Signature", ["signature", "node_id"])
 
 
 class SignedMessage:
-    def __init__(self, message, *, signatures: Optional[Tuple[Signature, ...]] = None):
+    def __init__(self, message, *, signatures: tuple[Signature, ...] | None = None):
         self.message = message
-        self.signatures: Tuple[Signature] = (
-            tuple() if signatures is None else signatures
-        )
+        self.signatures: tuple[Signature] = () if signatures is None else signatures
 
     def to_bytes(self):
         return self.message.encode("ascii")
@@ -81,8 +78,8 @@ class Node:
     def __init__(self) -> None:
         self.node_id = uuid.uuid4()
         self.extracted_msg = set()
-        self.inbox: List[SignedMessage] = []
-        self.peers: Optional[List["Node"]] = None
+        self.inbox: list[SignedMessage] = []
+        self.peers: list[Node] | None = None
 
         # generate private key
         # https://cryptography.io/en/latest/hazmat/primitives/asymmetric/rsa/#cryptography.hazmat.primitives.asymmetric.rsa.generate_private_key
@@ -214,9 +211,9 @@ class DolevStrong:
         node_count: int,
         input_msg: str,
         *,
-        malicious_count: Optional[int] = None,
-        n_rounds: Optional[int] = None,
-        malicious_strategy: Optional[MaliciousStrategy] = None,
+        malicious_count: int | None = None,
+        n_rounds: int | None = None,
+        malicious_strategy: MaliciousStrategy | None = None,
     ):
         # set up nodes
         if malicious_strategy == MaliciousStrategy.SENDER_ONLY:
