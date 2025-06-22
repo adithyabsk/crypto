@@ -1,5 +1,9 @@
 # A cryptography playground
 
+Tested on:
+
+- Python: 3.13.2
+
 ## Dolev-Strong
 
 The Dolev-Strong protocol implements a means of solving the Byzantine General

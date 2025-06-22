@@ -94,3 +94,4 @@ dmypy.json
 .direnv
 .envrc
 venv
+mise.toml
