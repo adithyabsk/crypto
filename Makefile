@@ -31,11 +31,9 @@ clean: ## Remove venv and cache
 
 .PHONY: lint
 lint: dev ## Run linting tools
-	uv run black --check .
-	uv run isort --check-only .
-	uv run flake8 .
+	uv run ruff check
 
 .PHONY: format
 format: dev ## Format code
-	uv run black .
-	uv run isort .
+	uv run ruff format
+	uv run ruff check --fix
