@@ -16,14 +16,28 @@ of the protocol.
 
 To run the tests
 
-```shell
-pytest -k dolev
+```bash
+make test
 ```
+
+Run test with logging output
+
+```bash
+uv run pytest --log-cli-level=DEBUG --capture=tee-sys -k test_dolev_malicious_sender
+```
+
+### Simulation
 
 To see the simulated output in the all honest case
 
-```shell
-python crypto/dolev_strong.py
+```bash
+uv run crypto/dolev_strong.py
+```
+
+Visualization
+
+```bash
+uv run crypto/visualization.py
 ```
 
 # TODOs

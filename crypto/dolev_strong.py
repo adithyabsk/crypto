@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import logging
 import uuid
 from collections import namedtuple
 from enum import Enum
@@ -8,7 +9,6 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
-from tqdm import tqdm
 
 public_key_store: dict[uuid.UUID, RSAPublicKey] = {}
 """Maps node_id to a public key"""
@@ -80,6 +80,7 @@ class Node:
         self.extracted_msg = set()
         self.inbox: list[SignedMessage] = []
         self.peers: list[Node] | None = None
+        self.logger = logging.getLogger(f"Node-{str(self.node_id)[:8]}")
 
         # generate private key
         # https://cryptography.io/en/latest/hazmat/primitives/asymmetric/rsa/#cryptography.hazmat.primitives.asymmetric.rsa.generate_private_key
@@ -91,9 +92,11 @@ class Node:
         public_key_store[self.node_id] = self.public_key
 
     def receive_msg(self, signed_message: "SignedMessage"):
+        self.logger.debug(f"Received message: {signed_message.message}")
         self.inbox.append(signed_message)
 
     def broadcast(self, signed_message: "SignedMessage"):
+        self.logger.debug(f"Broadcasting message: {signed_message.message}")
         for node in self.peers:
             # this could be done a network, but this is a simulation
             node.receive_msg(signed_message)
@@ -103,6 +106,7 @@ class Node:
             raise ValueError("peer nodes must be set before running node")
 
     def run(self, n_round: int):
+        self.logger.debug(f"Running round {n_round}")
         self._check_peer_nodes()
         for msg in self.inbox:
             valid, n_sigs = SignedMessage.verify(msg)
@@ -132,9 +136,11 @@ class Node:
 class Sender(Node):
     def __init__(self, input_msg):
         super().__init__()
+        self.logger = logging.getLogger(f"Sender-{str(self.node_id)[:8]}")
         self.receive_msg(SignedMessage(input_msg))
 
     def initial_broadcast(self, message: "SignedMessage"):
+        self.logger.info(f"Initial broadcast: {message.message}")
         self.broadcast(message)
         # send message to self
         # clear the sender's inbox
@@ -144,6 +150,7 @@ class Sender(Node):
 
     def run(self, n_round: int):
         if n_round == 0:
+            self.logger.info(f"Sender starting round {n_round}")
             self._check_peer_nodes()
             # inbox needs to be converted to a tuple so that the self referential
             # send does not cause an infinite loop
@@ -168,20 +175,31 @@ class MaliciousSender(Node):
 
     def __init__(self, input_msg):
         super().__init__()
+        self.logger = logging.getLogger(f"MaliciousSender-{str(self.node_id)[:8]}")
         self.input_msg = SignedMessage(input_msg)
 
     def run(self, n_round: int):
         if n_round == 0:
+            self.logger.info(f"Malicious sender starting round {n_round}")
             real_msg = SignedMessage.sign(
                 self.input_msg, self.node_id, self.private_key
             )
             malicious_msg = SignedMessage.sign(
                 self.malicious_message, self.node_id, self.private_key
             )
-            for node in self.peers[: len(self.peers)]:
+
+            half_point = len(self.peers) // 2
+            self.logger.info(f"Sending real message to first {half_point} nodes")
+            for node in self.peers[:half_point]:
                 node.receive_msg(real_msg)
-            for node in self.peers[len(self.peers) :]:
+
+            self.logger.info(
+                "Sending malicious message to remaining "
+                f"{len(self.peers) - half_point} nodes"
+            )
+            for node in self.peers[half_point:]:
                 node.receive_msg(malicious_msg)
+
             # send message to self
             # clear the sender's inbox
             self.inbox = []
@@ -195,7 +213,12 @@ class MaliciousNode(Node):
     is_malicious = True
     malicious_message = SignedMessage("Malicious Message")
 
+    def __init__(self):
+        super().__init__()
+        self.logger = logging.getLogger(f"MaliciousNode-{str(self.node_id)[:8]}")
+
     def run(self, n_round: int):
+        self.logger.info(f"Malicious node running round {n_round}")
         self._check_peer_nodes()
         for msg in self.inbox:
             valid, n_sigs = SignedMessage.verify(msg)
@@ -215,22 +238,40 @@ class DolevStrong:
         n_rounds: int | None = None,
         malicious_strategy: MaliciousStrategy | None = None,
     ):
+        self.logger = logging.getLogger("DolevStrong")
+
         # set up nodes
         if malicious_strategy == MaliciousStrategy.SENDER_ONLY:
             self.sender = MaliciousSender(input_msg)
+            self.logger.info("Created malicious sender")
         else:
             self.sender = Sender(input_msg)
+            self.logger.info("Created honest sender")
 
         self.nodes = [Node() for _ in range(node_count - 1)]
+        self.logger.info(f"Created {len(self.nodes)} additional nodes")
+
         # set node peers
         self.sender.peers = self.nodes
         for i, n in enumerate(self.nodes):
             n.peers = [self.sender] + self.nodes[:i] + self.nodes[i + 1 :]
 
+        if malicious_strategy and malicious_count is None:
+            raise ValueError(
+                "If a malicious strategy is specified, the number of malicious "
+                "nodes must also be specified"
+            )
+
         self.malicious_count = 0 if malicious_count is None else malicious_count
         self.n_rounds = self.malicious_count + 1 if n_rounds is None else n_rounds
         self.malicious_strategy = (
             MaliciousStrategy.NONE if malicious_strategy is None else malicious_strategy
+        )
+
+        self.logger.info(
+            f"Configuration: {node_count} nodes, "
+            f"{self.malicious_count} malicious, "
+            f"{self.n_rounds} rounds"
         )
 
         if (self.malicious_count + 1) >= node_count:
@@ -251,20 +292,28 @@ class DolevStrong:
         return [self.sender] + self.nodes
 
     def run(self):
-        for r in tqdm(range(self.n_rounds + 1)):
-            tqdm.write(f"Simulating round {r}")
+        self.logger.info("Starting Dolev-Strong protocol simulation")
+        for r in range(self.n_rounds + 1):
+            self.logger.info(f"Starting round {r}")
             if r == 0:
                 self.sender.run(r)
             else:
                 for n in self.all_nodes:
                     n.run(r)
+            self.logger.info(f"Completed round {r}")
 
         # output
+        self.logger.info("Final results:")
         for i, n in enumerate(self.all_nodes):
-            tqdm.write(f"{i}: {n}")
+            self.logger.info(f"Node {i}: {n}")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
     in_str = "Hello World!"
     ds = DolevStrong(5, in_str, malicious_strategy=MaliciousStrategy.SENDER_ONLY)
     ds.run()

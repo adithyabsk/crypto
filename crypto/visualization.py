@@ -489,6 +489,8 @@ def visualize_dolev_strong(node_count: int, input_msg: str, **kwargs):
 
 
 if __name__ == "__main__":
+    from crypto.dolev_strong import MaliciousStrategy
+
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -496,13 +498,13 @@ if __name__ == "__main__":
 
     logger = logging.getLogger(__name__)
 
-    # Example usage
-    # from crypto.dolev_strong import MaliciousStrategy
+    # logger.info("=== Honest Scenario ===")
+    # visualize_dolev_strong(5, "Hello World!")
 
-    logger.info("=== Honest Scenario ===")
-    visualize_dolev_strong(5, "Hello World!")
-
-    # logger.info("\n=== Malicious Sender Scenario ===")
-    # visualize_dolev_strong(
-    #     5, "Hello World!", malicious_strategy=MaliciousStrategy.SENDER_ONLY
-    # )
+    logger.info("\n=== Malicious Sender Scenario ===")
+    visualize_dolev_strong(
+        5,
+        "Hello World!",
+        malicious_strategy=MaliciousStrategy.SENDER_ONLY,
+        malicious_count=1,
+    )
