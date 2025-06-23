@@ -44,6 +44,9 @@ uv run crypto/visualization.py
 
 - [x] Implement all honest test case
 - [x] Implement malicious sender test case
-- [ ] Implement Malicious Node attack
-- [ ] Implement Sender / Node Coordinated attack
+- [x] Implement Malicious Node attack
+- [x] Implement Sender / Node Coordinated attack
+- [ ] Clean up animation (e.g. legend)
+- [ ] Walk through implementation
+- [ ] Walk through test cases
 - [ ] Link to the blog post
