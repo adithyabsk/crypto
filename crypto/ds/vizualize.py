@@ -9,11 +9,10 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.widgets import Button, Slider
 
-from crypto.dolev_strong import Configuration, DolevStrong, MaliciousStrategy
+from .models import Configuration
+from .protocol import DolevStrong
 
 plt.set_loglevel(level="warning")
-
-logger = logging.getLogger(__name__)
 
 
 class DolevStrongVisualizer:
@@ -464,32 +463,3 @@ class DolevStrongVisualizer:
     def show_visualization(self):
         """Show the interactive visualization (alias for consistency)."""
         self.show_interactive_visualization()
-
-
-# Convenience function for easy visualization
-def main():
-    """Create and run a visualized Dolev-Strong protocol simulation."""
-
-    config = Configuration(
-        node_count=5,
-        input_msg="Hello World!",
-        malicious_strategy=MaliciousStrategy.SENDER_ONLY,
-    )
-
-    logger.info("=== Malicious Sender Scenario ===")
-    logger.info(f"Creating Dolev-Strong visualization with {config.node_count} nodes")
-    logger.info(f"Input message: '{config.input_msg}'")
-    logger.info(f"Malicious strategy: {config.malicious_strategy}")
-
-    visualizer = DolevStrongVisualizer(config)
-    visualizer.show_visualization()
-    return visualizer
-
-
-if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
-    main()

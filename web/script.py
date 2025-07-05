@@ -4,8 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib_pyodide.browser_backend import TimerWasm
 from pyscript import current_target, document
 
-from crypto.dolev_strong import Configuration, MaliciousStrategy
-from crypto.visualization import DolevStrongVisualizer
+from crypto.ds import Configuration, DolevStrongVisualizer, MaliciousStrategy
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

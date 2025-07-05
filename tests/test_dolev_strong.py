@@ -3,7 +3,7 @@
 
 def test_dolev_all_honest():
     """Make sure protocol adheres to validity principle."""
-    from crypto.dolev_strong import Configuration, DolevStrong
+    from crypto.ds import Configuration, DolevStrong
 
     config = Configuration(
         node_count=5,
@@ -20,7 +20,7 @@ def test_dolev_all_honest():
 
 def test_dolev_malicious_sender():
     """Make sure protocol adheres to consistency principle."""
-    from crypto.dolev_strong import Configuration, DolevStrong, MaliciousStrategy
+    from crypto.ds import Configuration, DolevStrong, MaliciousStrategy
 
     config = Configuration(
         node_count=5,
@@ -37,7 +37,7 @@ def test_dolev_malicious_sender():
 
 def test_dolev_malicious_followers_drop_all():
     """Test protocol with malicious follower nodes that drop all messages."""
-    from crypto.dolev_strong import (
+    from crypto.ds import (
         Configuration,
         DolevStrong,
         MaliciousNodeStrategy,
@@ -61,7 +61,7 @@ def test_dolev_malicious_followers_drop_all():
 
 def test_dolev_malicious_followers_send_half():
     """Malicious follower nodes that only send to half their peers."""
-    from crypto.dolev_strong import (
+    from crypto.ds import (
         Configuration,
         DolevStrong,
         MaliciousNodeStrategy,
@@ -85,7 +85,7 @@ def test_dolev_malicious_followers_send_half():
 
 def test_dolev_extreme_malicious_followers():
     """Test with only one honest node (plus honest sender)."""
-    from crypto.dolev_strong import Configuration, DolevStrong, MaliciousStrategy
+    from crypto.ds import Configuration, DolevStrong, MaliciousStrategy
 
     config = Configuration(
         node_count=5,  # 1 sender + 4 followers
@@ -104,7 +104,7 @@ def test_dolev_extreme_malicious_followers():
 
 def test_dolev_coordinated_attack():
     """Test coordinated attack between malicious sender and malicious followers."""
-    from crypto.dolev_strong import Configuration, DolevStrong, MaliciousStrategy
+    from crypto.ds import Configuration, DolevStrong, MaliciousStrategy
 
     config = Configuration(
         node_count=8,  # 1 sender + 7 followers
@@ -131,7 +131,7 @@ def test_dolev_coordinated_attack():
 
 def test_dolev_coordinated_attack_minimal():
     """Test coordinated attack with minimal configuration (exactly at threshold)."""
-    from crypto.dolev_strong import Configuration, DolevStrong, MaliciousStrategy
+    from crypto.ds import Configuration, DolevStrong, MaliciousStrategy
 
     config = Configuration(
         node_count=4,  # 1 sender + 3 followers
@@ -154,7 +154,7 @@ def test_dolev_coordinated_attack_minimal():
 
 def test_dolev_coordinated_attack_large_network():
     """Test coordinated attack in larger network to verify scalability."""
-    from crypto.dolev_strong import Configuration, DolevStrong, MaliciousStrategy
+    from crypto.ds import Configuration, DolevStrong, MaliciousStrategy
 
     config = Configuration(
         node_count=12,  # 1 sender + 11 followers

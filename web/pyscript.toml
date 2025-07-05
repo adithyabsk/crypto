@@ -1,6 +1,6 @@
 packages = ['cryptography', 'matplotlib']
 
 [[fetch]]
-files = ['__init__.py', 'dolev_strong.py', 'visualization.py']
-from = '../crypto'
-to_folder = 'crypto'
+files = ['__init__.py', 'models.py', 'nodes.py', 'primitives.py', 'protocol.py', 'strategy.py', 'vizualize.py']
+from = '../crypto/ds'
+to_folder = 'crypto/ds'
