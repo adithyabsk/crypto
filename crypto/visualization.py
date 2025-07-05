@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.widgets import Button, Slider
+
 from crypto.dolev_strong import Configuration, DolevStrong
 
 plt.set_loglevel(level="warning")
@@ -37,7 +38,6 @@ class DolevStrongVisualizer:
             plt.subplots_adjust(bottom=0.25)
 
         self.node_positions = self._calculate_node_positions()
-        self.message_log = []
         self.current_round = 0
 
         # Track slider update source
@@ -227,8 +227,9 @@ class DolevStrongVisualizer:
         self.current_round = round_num
         self._draw_nodes()
 
-        # Draw messages for this round
-        round_messages = [msg for msg in self.message_log if msg["round"] == round_num]
+        # Get messages for this round from DolevStrong's message log
+        message_log = self.ds.get_message_log()
+        round_messages = [msg for msg in message_log if msg["round"] == round_num]
 
         for msg in round_messages:
             try:
@@ -453,7 +454,7 @@ class DolevStrongVisualizer:
         plt.show()
 
 
-# Enhanced DolevStrong class with visualization support
+# Simplified DolevStrong class for visualization
 class VisualizableDolevStrong:
     """Extended DolevStrong class that supports visualization."""
 
@@ -469,45 +470,13 @@ class VisualizableDolevStrong:
         # Set up logging
         self.logger = logging.getLogger("VisualizableDolevStrong")
 
-        # Monkey patch the broadcast method to log messages
-        self._patch_broadcast_methods()
-
-    def _patch_broadcast_methods(self):
-        """Patch broadcast methods to log messages for visualization."""
-        for node in self.ds.all_nodes:
-            original_broadcast = node.broadcast
-
-            def create_patched_broadcast(node_instance, orig_broadcast):
-                def patched_broadcast(signed_message):
-                    # Log messages for visualization
-                    if hasattr(node_instance, "peers") and node_instance.peers:
-                        for peer in node_instance.peers:
-                            self.visualizer.log_message(
-                                node_instance.node_id,
-                                peer.node_id,
-                                signed_message.message,
-                                self.visualizer.current_round,
-                            )
-                    # Call original broadcast
-                    orig_broadcast(signed_message)
-
-                return patched_broadcast
-
-            node.broadcast = create_patched_broadcast(node, original_broadcast)
 
     def run_simulation(self):
         """Run the simulation to collect all data for visualization."""
         self.logger.info("Running Dolev-Strong simulation...")
 
-        for r in range(self.ds.config.n_rounds + 1):
-            self.visualizer.current_round = r
-            self.logger.info(f"Simulating round {r}")
-
-            if r == 0:
-                self.ds.sender.run(r)
-            else:
-                for n in self.ds.all_nodes:
-                    n.run(r)
+        # Simply run the DolevStrong simulation - it will automatically log messages
+        self.ds.run()
 
         # Log final results
         self.logger.info("Final Results:")

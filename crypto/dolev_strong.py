@@ -4,8 +4,10 @@ import logging
 import uuid
 from abc import ABC, abstractmethod
 from collections import namedtuple
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
+from typing import Optional
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -17,6 +19,8 @@ public_key_store: dict[uuid.UUID, RSAPublicKey] = {}
 
 
 Signature = namedtuple("Signature", ["signature", "node_id"])
+# Type hint for message callback - purely for visualization purposes
+MessageCallback = Callable[[uuid.UUID, uuid.UUID, str, int], None]
 
 
 class SignedMessage:
@@ -84,6 +88,11 @@ class Node:
         self.peers: list[Node] | None = None
         self.logger = logging.getLogger(f"Node-{str(self.node_id)[:8]}")
 
+        # Visualization callback - NOT required for the actual algorithm
+        # This is purely for simulation/visualization purposes
+        self._message_callback: Optional[MessageCallback] = None
+        self._current_round: int = 0
+
         # generate private key
         # https://cryptography.io/en/latest/hazmat/primitives/asymmetric/rsa/#cryptography.hazmat.primitives.asymmetric.rsa.generate_private_key
         self.private_key = rsa.generate_private_key(
@@ -93,12 +102,32 @@ class Node:
         self.public_key = self.private_key.public_key()
         public_key_store[self.node_id] = self.public_key
 
+    def set_message_callback(self, callback: Optional[MessageCallback]) -> None:
+        """Set callback for message visualization - NOT part of the actual algorithm."""
+        self._message_callback = callback
+
+    def set_current_round(self, round_num: int) -> None:
+        """Set current round for visualization - NOT part of the actual algorithm."""
+        self._current_round = round_num
+
     def receive_msg(self, signed_message: "SignedMessage"):
         self.logger.debug(f"Received message: {signed_message.message}")
         self.inbox.append(signed_message)
 
     def broadcast(self, signed_message: "SignedMessage"):
         self.logger.debug(f"Broadcasting message: {signed_message.message}")
+        
+        # Notify visualization callback if present - NOT part of actual algorithm
+        if self._message_callback and self.peers:
+            for peer in self.peers:
+                self._message_callback(
+                    self.node_id, 
+                    peer.node_id, 
+                    signed_message.message, 
+                    self._current_round
+                )
+        
+        # Actual algorithm: broadcast to all peers
         for node in self.peers:
             # this could be done a network, but this is a simulation
             node.receive_msg(signed_message)
@@ -109,6 +138,9 @@ class Node:
 
     def run(self, n_round: int):
         self.logger.debug(f"Running round {n_round}")
+        # Update current round for visualization - NOT part of actual algorithm
+        self._current_round = n_round
+        
         self._check_peer_nodes()
         for msg in self.inbox:
             valid, n_sigs = SignedMessage.verify(msg)
@@ -153,6 +185,9 @@ class Sender(Node):
     def run(self, n_round: int):
         if n_round == 0:
             self.logger.info(f"Sender starting round {n_round}")
+            # Update current round for visualization - NOT part of actual algorithm
+            self._current_round = n_round
+            
             self._check_peer_nodes()
             # inbox needs to be converted to a tuple so that the self referential
             # send does not cause an infinite loop
@@ -579,6 +614,9 @@ class DolevStrong:
         self.logger = logging.getLogger("DolevStrong")
         self.config = config
 
+        # Message log for visualization - NOT part of the actual algorithm
+        self.message_log: list[dict] = []
+
         # Set up strategy based on malicious_strategy
         strategy = self._get_network_strategy(config.malicious_strategy)
 
@@ -596,11 +634,34 @@ class DolevStrong:
         for i, n in enumerate(self.nodes):
             n.peers = [self.sender] + self.nodes[:i] + self.nodes[i + 1 :]
 
+        # Set up visualization callbacks - NOT part of the actual algorithm
+        self._setup_visualization_callbacks()
+
         self.logger.info(
             f"Configuration: {config.node_count} nodes, "
             f"{config.malicious_count} malicious, "
             f"{config.n_rounds} rounds"
         )
+
+    def _setup_visualization_callbacks(self):
+        """Set up message callbacks for visualization - NOT part of actual algorithm."""
+        for node in self.all_nodes:
+            node.set_message_callback(self._log_message_for_visualization)
+
+    def _log_message_for_visualization(
+        self, sender_id: uuid.UUID, receiver_id: uuid.UUID, message: str, round_num: int
+    ):
+        """Log a message for visualization - NOT part of the actual algorithm."""
+        self.message_log.append({
+            "sender": sender_id,
+            "receiver": receiver_id,
+            "message": message,
+            "round": round_num,
+        })
+
+    def get_message_log(self) -> list[dict]:
+        """Get the message log for visualization - NOT part of the actual algorithm."""
+        return self.message_log.copy()
 
     def _get_network_strategy(
         self, malicious_strategy: MaliciousStrategy
