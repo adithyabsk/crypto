@@ -20,6 +20,10 @@ dev: venv ## Install dev dependencies
 test: dev ## Run pytest
 	uv run pytest
 
+.PHONY: web
+web:
+	uv run python -m http.server
+
 .PHONY: clean
 clean: ## Remove venv and cache
 	rm -rf .venv

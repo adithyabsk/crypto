@@ -46,6 +46,9 @@ uv run crypto/visualization.py
 - [x] Implement malicious sender test case
 - [x] Implement Malicious Node attack
 - [x] Implement Sender / Node Coordinated attack
+- [x] Refactor to use configuration pattern
+- [ ] Refactor into folder (`ds`) and split into separate files
+  - strategy, primitives, models, protocol
 - [ ] Clean up animation (e.g. legend)
 - [ ] Walk through implementation
 - [ ] Walk through test cases

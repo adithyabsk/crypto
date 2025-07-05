@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib_pyodide.browser_backend import TimerWasm
 from pyscript import current_target, document
 
-from crypto.dolev_strong import MaliciousStrategy
+from crypto.dolev_strong import Configuration, MaliciousStrategy
 from crypto.visualization import VisualizableDolevStrong
 
 # Set up logging
@@ -26,14 +26,15 @@ def create_visualization():
     """Create and return a web-based Dolev-Strong visualization."""
     logger.info("Creating web-based Dolev-Strong visualization")
 
-    # Create the visualizable simulation for web environment
-    vds = VisualizableDolevStrong(
-        5,  # 5 nodes
-        "Hello World!",
+    # Create the configuration for the simulation
+    config = Configuration(
+        node_count=5,
+        input_msg="Hello World!",
         malicious_strategy=MaliciousStrategy.SENDER_ONLY,
-        malicious_count=1,
-        is_web_environment=True,  # Flag for web-specific behavior
     )
+
+    # Create the visualizable simulation for web environment
+    vds = VisualizableDolevStrong(config, is_web_environment=True)
 
     # Run simulation to collect data
     vds.run_simulation()

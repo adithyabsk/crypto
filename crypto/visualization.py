@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.widgets import Button, Slider
+from crypto.dolev_strong import Configuration, DolevStrong
 
 plt.set_loglevel(level="warning")
 
@@ -52,7 +53,7 @@ class DolevStrongVisualizer:
         if not is_web_environment:
             self._create_controls()
 
-        self.logger.info(f"Initialization complete. n_rounds: {self.ds.n_rounds}")
+        self.logger.info(f"Initialization complete. n_rounds: {self.ds.config.n_rounds}")
 
     def _create_controls(self):
         """Create slider and button controls for interactive use."""
@@ -62,7 +63,7 @@ class DolevStrongVisualizer:
             ax_slider,
             "Round",
             0,
-            self.ds.n_rounds,
+            self.ds.config.n_rounds,
             valinit=0,
             valfmt="%d",
             valstep=1,
@@ -244,7 +245,7 @@ class DolevStrongVisualizer:
         self.create_legend()
 
         # Add round information
-        info_text = f"Round {round_num}/{self.ds.n_rounds}\n"
+        info_text = f"Round {round_num}/{self.ds.config.n_rounds}\n"
         info_text += f"Total messages this round: {len(round_messages)}"
         self.ax.text(
             -4.5,
@@ -377,7 +378,7 @@ class DolevStrongVisualizer:
         self.logger.info("Creating FuncAnimation")
 
         def animate(frame):
-            current_round = frame % (self.ds.n_rounds + 1)
+            current_round = frame % (self.ds.config.n_rounds + 1)
             self.logger.debug(
                 f"Animation frame {frame}, setting round to {current_round}"
             )
@@ -398,7 +399,7 @@ class DolevStrongVisualizer:
         ani = FuncAnimation(
             self.fig,
             animate,
-            frames=range(self.ds.n_rounds + 1),
+            frames=range(self.ds.config.n_rounds + 1),
             interval=1000,
             repeat=True,
             blit=False,
@@ -456,14 +457,11 @@ class DolevStrongVisualizer:
 class VisualizableDolevStrong:
     """Extended DolevStrong class that supports visualization."""
 
-    def __init__(self, *args, **kwargs):
-        from crypto.dolev_strong import DolevStrong
+    def __init__(self, config: Configuration, is_web_environment=False):
+        # Initialize the DolevStrong instance with the provided configuration
+        self.ds = DolevStrong(config)
 
-        # Get is_web_environment flag from kwargs if provided
-        is_web_environment = kwargs.pop("is_web_environment", False)
-
-        self.ds = DolevStrong(*args, **kwargs)
-
+        # Initialize the visualizer
         self.visualizer = DolevStrongVisualizer(
             self.ds, is_web_environment=is_web_environment
         )
@@ -501,7 +499,7 @@ class VisualizableDolevStrong:
         """Run the simulation to collect all data for visualization."""
         self.logger.info("Running Dolev-Strong simulation...")
 
-        for r in range(self.ds.n_rounds + 1):
+        for r in range(self.ds.config.n_rounds + 1):
             self.visualizer.current_round = r
             self.logger.info(f"Simulating round {r}")
 
@@ -523,22 +521,21 @@ class VisualizableDolevStrong:
 
 
 # Convenience function for easy visualization
-def visualize_dolev_strong(node_count: int, input_msg: str, **kwargs):
+def visualize_dolev_strong(config: Configuration, is_web_environment=False):
     """Create and run a visualized Dolev-Strong protocol simulation."""
     logger = logging.getLogger("visualize_dolev_strong")
 
-    logger.info(f"Creating Dolev-Strong visualization with {node_count} nodes")
-    logger.info(f"Input message: '{input_msg}'")
-    if "malicious_strategy" in kwargs:
-        logger.info(f"Malicious strategy: {kwargs['malicious_strategy']}")
+    logger.info(f"Creating Dolev-Strong visualization with {config.node_count} nodes")
+    logger.info(f"Input message: '{config.input_msg}'")
+    logger.info(f"Malicious strategy: {config.malicious_strategy}")
 
-    vds = VisualizableDolevStrong(node_count, input_msg, **kwargs)
+    vds = VisualizableDolevStrong(config, is_web_environment=is_web_environment)
     vds.show_visualization()
     return vds
 
 
 if __name__ == "__main__":
-    from crypto.dolev_strong import MaliciousStrategy
+    from crypto.dolev_strong import MaliciousStrategy, Configuration
 
     logging.basicConfig(
         level=logging.DEBUG,
@@ -547,13 +544,10 @@ if __name__ == "__main__":
 
     logger = logging.getLogger(__name__)
 
-    # logger.info("=== Honest Scenario ===")
-    # visualize_dolev_strong(5, "Hello World!")
-
     logger.info("\n=== Malicious Sender Scenario ===")
-    visualize_dolev_strong(
-        5,
-        "Hello World!",
+    config = Configuration(
+        node_count=5,
+        input_msg="Hello World!",
         malicious_strategy=MaliciousStrategy.SENDER_ONLY,
-        malicious_count=1,
     )
+    visualize_dolev_strong(config)
