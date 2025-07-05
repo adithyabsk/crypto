@@ -59,7 +59,8 @@ open "http://localhost:8000/web"
 - [x] Refactor to use configuration pattern
 - [x] Refactor into folder (`ds`) and split into separate files
   - strategy, primitives, models, protocol
-- [ ] Clean up animation (e.g. legend)
 - [ ] Walk through implementation
 - [ ] Walk through test cases
-- [ ] Link to the blog post
+- [ ] Walk through paper again
+- [ ] Clean up animation (e.g. legend)
+- [ ] Write / link to the blog post
