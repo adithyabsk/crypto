@@ -9,22 +9,24 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.widgets import Button, Slider
 
-from crypto.dolev_strong import Configuration, DolevStrong
+from crypto.dolev_strong import Configuration, DolevStrong, MaliciousStrategy
 
 plt.set_loglevel(level="warning")
+
+logger = logging.getLogger(__name__)
 
 
 class DolevStrongVisualizer:
     """Visualizes the Dolev-Strong protocol message passing."""
 
-    def __init__(
-        self, dolev_strong_instance, fig=None, ax=None, is_web_environment=False
-    ):
+    def __init__(self, config: Configuration, fig=None, ax=None, is_web_environment=False):
         # Set up logging
         self.logger = logging.getLogger("DolevStrongVisualizer")
         self.logger.info("Initializing DolevStrongVisualizer")
 
-        self.ds = dolev_strong_instance
+        # Initialize the DolevStrong instance with the provided configuration
+        self.ds = DolevStrong(config)
+        self.config = config
         self.is_web_environment = is_web_environment
 
         # Create figure and axes if not provided
@@ -207,19 +209,6 @@ class DolevStrongVisualizer:
             fontsize=7,
             bbox={"boxstyle": "round,pad=0.1", "facecolor": "yellow", "alpha": 0.9},
             rotation=np.degrees(np.arctan2(dy, dx)) if abs(dx) > abs(dy) else 0,
-        )
-
-    def log_message(
-        self, sender_id: uuid.UUID, receiver_id: uuid.UUID, message: str, round_num: int
-    ):
-        """Log a message for visualization."""
-        self.message_log.append(
-            {
-                "sender": sender_id,
-                "receiver": receiver_id,
-                "message": message,
-                "round": round_num,
-            }
         )
 
     def visualize_round(self, round_num: int):
@@ -432,8 +421,23 @@ class DolevStrongVisualizer:
         timer = timer_class(interval=1500)
         return self.create_auto_animation(event_source=timer)
 
+    def run_simulation(self):
+        """Run the simulation to collect all data for visualization."""
+        self.logger.info("Running Dolev-Strong simulation...")
+
+        # Simply run the DolevStrong simulation - it will automatically log messages
+        self.ds.run()
+
+        # Log final results
+        self.logger.info("Final Results:")
+        for i, n in enumerate(self.ds.all_nodes):
+            self.logger.info(f"{i}: {n}")
+
     def show_interactive_visualization(self):
         """Show interactive visualization with controls."""
+        # Run simulation first
+        self.run_simulation()
+        
         # Initial visualization
         self.visualize_round(0)
 
@@ -453,70 +457,35 @@ class DolevStrongVisualizer:
         plt.tight_layout()
         plt.show()
 
-
-# Simplified DolevStrong class for visualization
-class VisualizableDolevStrong:
-    """Extended DolevStrong class that supports visualization."""
-
-    def __init__(self, config: Configuration, is_web_environment=False):
-        # Initialize the DolevStrong instance with the provided configuration
-        self.ds = DolevStrong(config)
-
-        # Initialize the visualizer
-        self.visualizer = DolevStrongVisualizer(
-            self.ds, is_web_environment=is_web_environment
-        )
-
-        # Set up logging
-        self.logger = logging.getLogger("VisualizableDolevStrong")
-
-
-    def run_simulation(self):
-        """Run the simulation to collect all data for visualization."""
-        self.logger.info("Running Dolev-Strong simulation...")
-
-        # Simply run the DolevStrong simulation - it will automatically log messages
-        self.ds.run()
-
-        # Log final results
-        self.logger.info("Final Results:")
-        for i, n in enumerate(self.ds.all_nodes):
-            self.logger.info(f"{i}: {n}")
-
     def show_visualization(self):
-        """Show the interactive visualization."""
-        self.run_simulation()
-        self.visualizer.show_interactive_visualization()
+        """Show the interactive visualization (alias for consistency)."""
+        self.show_interactive_visualization()
 
 
 # Convenience function for easy visualization
-def visualize_dolev_strong(config: Configuration, is_web_environment=False):
+def main():
     """Create and run a visualized Dolev-Strong protocol simulation."""
-    logger = logging.getLogger("visualize_dolev_strong")
 
-    logger.info(f"Creating Dolev-Strong visualization with {config.node_count} nodes")
-    logger.info(f"Input message: '{config.input_msg}'")
-    logger.info(f"Malicious strategy: {config.malicious_strategy}")
-
-    vds = VisualizableDolevStrong(config, is_web_environment=is_web_environment)
-    vds.show_visualization()
-    return vds
-
-
-if __name__ == "__main__":
-    from crypto.dolev_strong import MaliciousStrategy, Configuration
-
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
-    logger = logging.getLogger(__name__)
-
-    logger.info("\n=== Malicious Sender Scenario ===")
     config = Configuration(
         node_count=5,
         input_msg="Hello World!",
         malicious_strategy=MaliciousStrategy.SENDER_ONLY,
     )
-    visualize_dolev_strong(config)
+
+    logger.info("=== Malicious Sender Scenario ===")
+    logger.info(f"Creating Dolev-Strong visualization with {config.node_count} nodes")
+    logger.info(f"Input message: '{config.input_msg}'")
+    logger.info(f"Malicious strategy: {config.malicious_strategy}")
+
+    visualizer = DolevStrongVisualizer(config)
+    visualizer.show_visualization()
+    return visualizer
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    main()
