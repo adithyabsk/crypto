@@ -7,7 +7,6 @@ from collections import namedtuple
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -90,7 +89,7 @@ class Node:
 
         # Visualization callback - NOT required for the actual algorithm
         # This is purely for simulation/visualization purposes
-        self._message_callback: Optional[MessageCallback] = None
+        self._message_callback: MessageCallback | None = None
         self._current_round: int = 0
 
         # generate private key
@@ -102,7 +101,7 @@ class Node:
         self.public_key = self.private_key.public_key()
         public_key_store[self.node_id] = self.public_key
 
-    def set_message_callback(self, callback: Optional[MessageCallback]) -> None:
+    def set_message_callback(self, callback: MessageCallback | None) -> None:
         """Set callback for message visualization - NOT part of the actual algorithm."""
         self._message_callback = callback
 
@@ -116,17 +115,17 @@ class Node:
 
     def broadcast(self, signed_message: "SignedMessage"):
         self.logger.debug(f"Broadcasting message: {signed_message.message}")
-        
+
         # Notify visualization callback if present - NOT part of actual algorithm
         if self._message_callback and self.peers:
             for peer in self.peers:
                 self._message_callback(
-                    self.node_id, 
-                    peer.node_id, 
-                    signed_message.message, 
-                    self._current_round
+                    self.node_id,
+                    peer.node_id,
+                    signed_message.message,
+                    self._current_round,
                 )
-        
+
         # Actual algorithm: broadcast to all peers
         for node in self.peers:
             # this could be done a network, but this is a simulation
@@ -140,7 +139,7 @@ class Node:
         self.logger.debug(f"Running round {n_round}")
         # Update current round for visualization - NOT part of actual algorithm
         self._current_round = n_round
-        
+
         self._check_peer_nodes()
         for msg in self.inbox:
             valid, n_sigs = SignedMessage.verify(msg)
@@ -187,7 +186,7 @@ class Sender(Node):
             self.logger.info(f"Sender starting round {n_round}")
             # Update current round for visualization - NOT part of actual algorithm
             self._current_round = n_round
-            
+
             self._check_peer_nodes()
             # inbox needs to be converted to a tuple so that the self referential
             # send does not cause an infinite loop
@@ -652,12 +651,14 @@ class DolevStrong:
         self, sender_id: uuid.UUID, receiver_id: uuid.UUID, message: str, round_num: int
     ):
         """Log a message for visualization - NOT part of the actual algorithm."""
-        self.message_log.append({
-            "sender": sender_id,
-            "receiver": receiver_id,
-            "message": message,
-            "round": round_num,
-        })
+        self.message_log.append(
+            {
+                "sender": sender_id,
+                "receiver": receiver_id,
+                "message": message,
+                "round": round_num,
+            }
+        )
 
     def get_message_log(self) -> list[dict]:
         """Get the message log for visualization - NOT part of the actual algorithm."""

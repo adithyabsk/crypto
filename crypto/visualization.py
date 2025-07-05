@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 class DolevStrongVisualizer:
     """Visualizes the Dolev-Strong protocol message passing."""
 
-    def __init__(self, config: Configuration, fig=None, ax=None, is_web_environment=False):
+    def __init__(
+        self, config: Configuration, fig=None, ax=None, is_web_environment=False
+    ):
         # Set up logging
         self.logger = logging.getLogger("DolevStrongVisualizer")
         self.logger.info("Initializing DolevStrongVisualizer")
@@ -55,7 +57,9 @@ class DolevStrongVisualizer:
         if not is_web_environment:
             self._create_controls()
 
-        self.logger.info(f"Initialization complete. n_rounds: {self.ds.config.n_rounds}")
+        self.logger.info(
+            f"Initialization complete. n_rounds: {self.ds.config.n_rounds}"
+        )
 
     def _create_controls(self):
         """Create slider and button controls for interactive use."""
@@ -437,7 +441,7 @@ class DolevStrongVisualizer:
         """Show interactive visualization with controls."""
         # Run simulation first
         self.run_simulation()
-        
+
         # Initial visualization
         self.visualize_round(0)
 
